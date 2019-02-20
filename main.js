@@ -8,7 +8,7 @@ var app = http.createServer(function(request, response){
     var title = queryData.id;
     
     if(_url == '/'){
-        console.log("쿼리아이디 정의되지 않음");
+        console.log("쿼리아이디 없음");
         title = "Welcome!"
   
      }
