@@ -53,8 +53,8 @@ var app = http.createServer(function(request, response){
         } else {
             fs.readdir('./data', function(error, datalist){
                 var flist = makeList(datalist);
-                var template = templateHTML(title, flist, queryData.id)
                 fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
+                    var template = templateHTML(title, flist, description)
                     response.writeHead(200);
                     response.end(template);
                 });
