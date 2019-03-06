@@ -1,8 +1,9 @@
 var http = require('http'); 
 var fs = require('fs');
 var url = require('url');
+var qs = require('querystring');
 
-function templateHTML(title, flist, body){
+function templateHTML(title, flist, body, control){
     return `
     <!DOCTYPE html>
     <html>
@@ -13,10 +14,9 @@ function templateHTML(title, flist, body){
     
     <body>
     <h1><a href="/">WEB</a></h1>
-    <h3>${flist}
-    </h3>
-    <h2>${title}</h2>
-    <p>${body}</p>
+    <h3>${flist}</h3>
+    ${control}
+    ${body}
     </body>
     </html>
     `;
@@ -35,7 +35,7 @@ function makeList(datalist){
 
 var app = http.createServer(function(request, response){
     var _url = request.url;
-    var queryData = url.parse(_url, true).query;
+    var queryData = url.parse(_url, true).query;  //url모듈의 parse펑션과 query컨스트럭터(생성자함수)
     var title = queryData.id;
     var pathname = url.parse(_url, true).pathname;
 
@@ -45,7 +45,7 @@ var app = http.createServer(function(request, response){
             var description = "Its Works!"
             fs.readdir('./data', function(error, datalist){
                 var flist = makeList(datalist);
-                var template = templateHTML(title, flist, description)
+                var template = templateHTML(title, flist, `<h2>${title}</h2>${description}`, `<a href="/create">create</a>`);
                 response.writeHead(200);
                 response.end(template);
             });
@@ -54,14 +54,46 @@ var app = http.createServer(function(request, response){
             fs.readdir('./data', function(error, datalist){
                 var flist = makeList(datalist);
                 fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
-                    var template = templateHTML(title, flist, description)
+                    var template = templateHTML(title, flist, `<h2>${title}</h2>${description}`, `<a href="/create">create</a> <a href="/update?id=${title}">update</a>`);
                     response.writeHead(200);
                     response.end(template);
                 });
             });
         }
 
-                
+    } else if(pathname === '/create') {
+        fs.readdir('./data', function(error, datalist){
+            var title = "Create";
+            var flist = makeList(datalist);
+            var template = templateHTML(title, flist, 
+                `<form action="http://localhost:3000/create_process" method="post">
+                <p><input type="text" name="title" placeholder="File Title"></p>
+                <p>
+                <textarea name="description" placeholder="description"></textarea>
+                </p>
+                <p>
+                    <input type="submit">
+                </p>
+                </form>
+            `, '');
+            response.writeHead(200);
+            response.end(template);
+        });
+    } else if(pathname === '/create_process') {
+        var formBody = '';
+        request.on('data', function(data){
+            formBody = formBody + data;
+        });
+        request.on('end', function(){
+            var post = qs.parse(formBody);
+            var title = post.title;
+            var description = post.description;
+            fs.writeFile(`data/${title}`, description, 'utf8', function(err){
+                response.writeHead(302, {Location: `/?id=${title}`});
+                response.end(); //302는 리다이렉션(이동) 시키라는 것.
+            });
+        });
+    
     } else {
         response.writeHead(404);
         response.end('not found!');
