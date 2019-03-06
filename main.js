@@ -2,36 +2,9 @@ var http = require('http');
 var fs = require('fs');
 var url = require('url');
 var qs = require('querystring');
-
-function templateHTML(title, flist, body, control){
-    return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <title>${title}</title>
-    </head>
-    
-    <body>
-    <h1><a href="/">WEB</a></h1>
-    <h3>${flist}</h3>
-    ${control}
-    ${body}
-    </body>
-    </html>
-    `;
-}
-
-function makeList(datalist){           
-    var i = 0;
-    var flist = `<ul>`;
-    while (i < datalist.length){
-        flist = flist + `<li><a href="/?id=${datalist[i]}">${datalist[i]}</a></li>`;
-        i = i + 1;
-    }
-    flist = flist + `</ul>`;
-    return flist;
-}
+var template = require('./lib/template.js');
+var path = require('path');
+var sanitizeHtml = require('sanitize-html'); //입력되는 태그 방지(소독).
 
 var app = http.createServer(function(request, response){
     var _url = request.url;
@@ -43,36 +16,43 @@ var app = http.createServer(function(request, response){
         if(queryData.id === undefined) {
             var title = "Hello WEB";
             var description = "Its Works!"
-            fs.readdir('./data', function(error, datalist){
-                var flist = makeList(datalist);
-                var template = templateHTML(title, flist, `<h2>${title}</h2>${description}`, `<a href="/create">create</a>`);
+            fs.readdir('./data', function(error, filelist){
+                var list = template.list(filelist);
+                var html = template.HTML(title, list, `<h2>${title}</h2>${description}`, `<a href="/create">create</a>`);
                 response.writeHead(200);
-                response.end(template);
+                response.end(html);
             });
 
         } else {
-            fs.readdir('./data', function(error, datalist){
-                fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
+            fs.readdir('./data', function(error, filelist){
+                var filteredId = path.parse(queryData.id).base;
+                fs.readFile(`data/${filteredId}`, 'utf8', function(err, description){
                     var title = queryData.id;
-                    var flist = makeList(datalist);
-                    var template = templateHTML(title, flist, `<h2>${title}</h2>${description}`, 
+                    var sanitizedTitle = sanitizeHtml(title);
+                    var sanitizedDescription = sanitizeHtml(description, {
+                        allowedTags:['h1'] //허용하는 태그를 두번째 인자에 넣어준 것.
+                    });
+                    var list = template.list(filelist);
+                    var html = template.HTML(sanitizedTitle, list,
+                    `<h2>${sanitizedTitle}</h2>${sanitizedDescription}`, 
                     `<a href="/create">create</a>
-                    <a href="/update?id=${title}">update</a>
+                    <a href="/update?id=${sanitizedTitle}">update</a>
                     <form action="delete_process" method="post">
-                    <input type="hidden" name="id" value="${title}">
+                    <input type="hidden" name="id" value="${sanitizedTitle}">
                     <input type="submit" value="delete">
-                    </form>`);
+                    </form>`
+                    );
                     response.writeHead(200);
-                    response.end(template);
+                    response.end(html);
                 });
             });
         }
 
     } else if(pathname === '/create') {
-        fs.readdir('./data', function(error, datalist){
+        fs.readdir('./data', function(error, filelist){
             var title = "Create";
-            var flist = makeList(datalist);
-            var template = templateHTML(title, flist, 
+            var list = template.list(filelist);
+            var html = template.HTML(title, list, 
                 `<form action="http://localhost:3000/create_process" method="post">
                 <p><input type="text" name="title" placeholder="File Title"></p>
                 <p>
@@ -84,7 +64,7 @@ var app = http.createServer(function(request, response){
                 </form>
             `, '');
             response.writeHead(200);
-            response.end(template);
+            response.end(html);
         });
 
     } else if(pathname === '/create_process') {
@@ -103,11 +83,12 @@ var app = http.createServer(function(request, response){
         });
 
     } else if(pathname === '/update'){
-        fs.readdir('./data', function(error, datalist){
-          fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
+        fs.readdir('./data', function(error, filelist){
+        var filteredId = path.parse(queryData.id).base;
+          fs.readFile(`data/${filteredId}`, 'utf8', function(err, description){
             var title = queryData.id;
-            var flist = makeList(datalist);
-            var template = templateHTML(title, flist,
+            var list = template.list(filelist);
+            var html = template.HTML(title, list,
               `
               <form action="/update_process" method="post">
                 <input type="hidden" name="id" value="${title}">
@@ -123,7 +104,7 @@ var app = http.createServer(function(request, response){
               `<a href="/create">create</a> <a href="/update?id=${title}">update</a>`
             );
             response.writeHead(200);
-            response.end(template);
+            response.end(html);
           });
         });
 
@@ -135,9 +116,10 @@ var app = http.createServer(function(request, response){
         request.on('end', function(){
             var post = qs.parse(body);
             var id = post.id;
+            var filteredId = path.parse(id).base;
             var title = post.title;
             var description = post.description;
-            fs.rename(`data/${id}`, `data/${title}`, function(error){
+            fs.rename(`data/${filteredId}`, `data/${title}`, function(error){
               fs.writeFile(`data/${title}`, description, 'utf8', function(err){
                 response.writeHead(302, {Location: `/?id=${title}`});
                 response.end();
@@ -153,7 +135,8 @@ var app = http.createServer(function(request, response){
         request.on('end', function(){
             var post = qs.parse(body);
             var id = post.id;
-            fs.unlink(`data/${id}`, function(error){
+            var filteredId = path.parse(id).base;
+            fs.unlink(`data/${filteredId}`, function(error){
               response.writeHead(302, {Location: `/`});
               response.end();
             })
