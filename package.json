@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/newseoyun/nodejs-tutorial#readme",
   "dependencies": {
+    "mysql": "^2.16.0",
     "sanitize-html": "^1.20.0"
   }
 }
